@@ -1,0 +1,301 @@
+---
+title: "Milestone 6"
+author: "Angela Fu"
+date: "4/3/2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+nocite: |
+  @*
+bibliography: bibliography.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+library(gt)
+library(miceadds)
+library(stargazer)
+library(devtools)
+library(tidyverse)
+library(Zelig)
+library(texreg)
+library(lfe)
+```
+
+```{r data-setup}
+
+# read in data
+
+data <- read.csv("Data/IchinoNathan_APSR_pollingstation_data.csv", header=TRUE)
+data_survey <- read.csv("Data/IchinoNathan_APSR_survey_data.csv")
+
+```
+
+## Footnote
+
+Analysis ^[All analysis for this paper is available [here](https://github.com/angelafu7/milestone6).]
+
+## Graphic
+
+```{r graphic}
+
+# create graphic
+
+graphic <- data %>%
+  
+  # eliminate NAs
+  
+  na.omit() %>%
+  ggplot(aes(x=akan_p_poly, y=npp2008ps_pres_p)) +
+  
+  # geom_point creates a scatterplot
+  
+  geom_point() + 
+  labs(
+    title = "Polling Stations by Vote and Akan Population",
+    subtitle = "Comparing Akan population at polling station vs support for the NPP",
+    x = "Percent Population Akan",
+    y = "NPP Presidential Vote Share"
+  )
+
+# print graphic
+
+graphic
+```
+
+
+## Overview
+
+In their paper "Crossing the Line: Local Ethnic Geography and Voting in Ghana," Nahomi Ichino and Noah Nathan investigate the effects of local ethnic demographics on voters' decisions. To do this, they use data on the ethnic composition of the neighborhoods surrounding each polling station in Ghana. They then compare the demographics of that area with the vote share from the 2008 presidential election. For example, at a polling station located in an area dominated by the Akan ethnic group, they found that the vote share for the New Patriotic Party (which is associated with the Akan group) is higher than the population share of Akans. This signifies that people are more likely to vote for the party that is associated with the ethnic group living in their area. To draw this conclusion, Ichino and Nathan build several regression models in which they try to predict the NPP presidential vote share at a certain polling station. Factors included in that regression include ethnic demographics, level of developments, and proportion of the population employed in the public or semipublic sector.
+
+## Extension
+
+In my extension, I will be reexamining the logistic regressions used to analyze individual-level data. Ichino and Nathan built several regressions to predict the likelihood that an individual supports the NDC or the NPP. Their variables include the respondent's ethnicity, the ethnicity of the area in which the respondent lives, the respondent's gender, and the respondent's attitudes toward other ethnic groups and the government, among other variables. One other additional variable I would like to explore in these regression models is trustown, which measures whether a respondent trusts other members of their own ethnic group. This measure should affect whether a person is willing to support a party associated with their own ethnic group. I would also like to add an interaction term between economy_oneyear (measures whether the respondent believes economic conditions have worsened or improved) and poverty (measures poverty of respodnent) because the two are likely to be linked. A respondent in severe poverty will likely believe the economy has worsened.
+
+## Replication
+
+I was able to replicate almost all of the major results. I did have issues replicating the standard errors found in the logistic equations because Ichino and Nathan used Stata to build their regressions, which include clustering. I can achieve the same results using glm.cluster, but that model is not supported by stargazer, so I am currently looking into other ways to calculate the clustered standard errors. 
+
+## Appendix
+
+```{r table}
+
+# Table 1 replication
+
+# choose pertinent data for the table
+
+data1 <- data %>%
+  select(area_sqkm, sex_total, akan_p_poly, gadangbe_p_poly, ewe_p_poly, guan_p_poly, gurma_p_poly, moledagbon_p_poly, grusi_p_poly, mande_p_poly, other_eth_p_poly, ethfrac_poly, english_percent, public_semipublic_p, dev_factor2, akan_30km_l_p, h_30rad_e)
+
+# create new table
+
+table1 <- matrix(NA, nrow=ncol(data1), ncol=4)
+
+# this calculates summary statistics for each variable
+
+for(i in 1:ncol(data1)){
+table1[i,1] <- mean(data1[,i])
+table1[i,2] <- sd(data1[,i])
+table1[i,3] <-min(data1[,i])
+table1[i,4] <-max(data1[,i])
+}
+
+# this labels the summary statistics
+
+colnames(table1)<-c("Mean", "SD", "Min", "Max")
+
+# this cuts off the numbers so there are no trailing digits
+
+table1 <- round(table1, digits=2)
+
+# this vector contains row lables
+
+Variable <- c("Area (sq. km.)", "Total population", "% Akan at polling station", "% Ga-Dangbe at polling station", "% Ewe at polling station", "% Guan at polling station", "% Gurma at polling station", "% Mole-Dagbon at polling station", "% Grusi at polling station", "Mande at polling station", "% Other ethnic groups at polling station", "Ethnic fractionalization", "% Speak English", "% Public/semipublic employment", "Development index (EA)", "Akan in 30 km (spatially weighted)", "Segregation (H) in 30 km")
+
+# add the row labels to the final table
+
+table1 <- cbind(Variable, table1)
+
+# use gt to make the table well-formatted and to add more details
+
+gttable <- gt(table1) %>%
+  tab_header(
+    title = "Table 1",
+    subtitle = "Summary Statistics for Enumeration Areas around Brong Ahafo Polling Stations" 
+    ) %>%
+  tab_source_note(
+        source_note = md("*Note: n* = 1633. Data sources described in the text")
+      )
+
+# print table
+
+gttable
+```
+
+```{r, results = "asis"}
+m1 <- lm(npp2008ps_pres_p ~ akan_p_poly + moledagbon_p_poly + otherethn_p_poly + public_semipublic_p + dev_factor2 + factor(c230_id_h), data=data, weights=totalvotes2008ps_pres)
+
+m2 <- lm(npp2008ps_pres_p ~ akan_p_poly + moledagbon_p_poly + otherethn_p_poly + public_semipublic_p + dev_factor2 + akan_30km_l_p + factor(c230_id_h), data=data, weights= totalvotes2008ps_pres)
+
+m3 <- lm(npp2008ps_pres_p ~ akan_p_poly  + moledagbon_p_poly + otherethn_p_poly + public_semipublic_p + dev_factor2 + akan_30km_l_p + I(akan_30km_l_p*akan_p_poly) + factor(c230_id_h), data=data, weights= totalvotes2008ps_pres)
+
+# print result
+stargazer(m1, m2, m3, 
+          type = "latex", 
+          style = "apsr",
+          order = c(6,7,1,2,3,4,5),
+          keep = c("\\bakan_30km_l_p\\b", "\\bakan_p_poly\\b", "\\bmoledagbon_p_poly\\b", "\\botherethn_p_poly\\b", "\\bpublic_semipublic_p\\b", "\\bdev_factor2\\b"),
+          omit.stat = c("n", "adj.rsq", "ser", "f"),
+          covariate.labels = c("\\% Akan in 30 km (spatially weighted)", "\\% Akan in 30 km (spatially weighted)", "\\% Akan at polling station", "\\% Mole-Dagbon at polling station", "\\% Minor ethnic groups at polling station", "\\% Public sector employment", "Development index (EA)"),
+          title = "TABLE 2. Local Ethnic Geography and NPP Vote Share in the 2008 Presidential Election",
+          dep.var.labels.include = FALSE,
+          notes = "\\parbox[t]{12cm}{Notes: Significant at p < 0.10; *p < 0.05; **p < 0.01; ***p < 0.001. n = 1580. Weighted least squares with weights equal to total votes cast in the first round of the 2008 presidential election by polling station. All models include parliamentary constituency fixed effects (not shown). Standard errors in parentheses}",
+          notes.append = FALSE,
+          header = FALSE)
+
+
+```
+
+```{r}
+# Table 3 replication
+
+# choose pertinent data for the table
+
+data3 <- data_survey %>% 
+  filter(const230_h != "KUMASI") %>%
+  select(eth_akan, eth_ewe, eth_ga, eth_dagomba, vote_npp_pres, vote_ndc_pres, economy_oneyear, unfair, poverty, urb, trustother, gov_sentus, male, central, r4, akan_30km_l_p, ewe_30km_l_p, akan_5km_l_p, ewe_5km_l_p, popdens5x5, dev_factor2)
+  
+
+table3 <- matrix(NA, nrow=ncol(data3), ncol=4)
+
+# this calculates summary statistics for each variable
+
+for(i in 1:ncol(data3)){
+table3[i,1] <- mean(data3[,i], na.rm = TRUE)
+table3[i,2] <- sd(data3[,i], na.rm = TRUE)
+table3[i,3] <-min(data3[,i], na.rm = TRUE)
+table3[i,4] <-max(data3[,i], na.rm = TRUE)
+}
+
+# this labels the summary statistics
+
+colnames(table3)<-c("Mean", "SD", "Min", "Max")
+
+# this cuts off the numbers so there are no trailing digits
+
+table3 <- round(table3, digits=2)
+
+# this vector contains row lables
+
+Variable3 <- c("Akan", "Ewe", "Ga", "Dogomba (Mole-Dagbon", "Vote NPP", "Vote NDC", "Economy approval", "Unfair", "Poverty (individual)", "Urban", "Trust other group", "Enumerator sent by government", "Male", "Central Region", "Round 4", "% Akan in 30 km (spatially weighted)", "% Ewe in 30 km (spatially weighted)", "% Akan in 5 km (spatially weighted)", "% Ewe in 5 km (spatially weighted)", "Population density (5-km x 5-km area)", "Development index (EA)")
+
+# add the row labels to the final table
+
+table3 <- cbind(Variable3, table3)
+
+# use gt to make the table well-formatted and to add more details
+
+gttable3 <- gt(table3) %>%
+  tab_header(
+    title = "TABLE 3",
+    subtitle = "Summary Statistics for Individual-Level Analysis"
+    ) %>%
+  cols_label(
+    Variable3 = "Variable"
+  ) %>%
+  tab_row_group(
+    group = "Afrobarometer",
+    rows = 1:15
+  ) %>%
+  tab_row_group(
+    group = "Local Area Characteristics (from Census)",
+    rows = 16:21
+  ) %>%
+  tab_source_note(
+        source_note = md("*Notes*: All Afrobarometer variables are binary, except for Economy Approval (1 to 5) and Poverty. Data sources described in the text. *n* = 2287, except for 'Trust other group,' which is Round 3 only (n=1108)")
+      )
+
+# print table
+
+gttable3
+```
+
+
+```{r, results = "asis"}
+data4 <- data_survey %>%
+  mutate(akan30_central = akan_30km_l_p*central) %>%
+  filter(urb == 0)
+
+mg41 <- glm(vote_npp_pres ~ akan_30km_l_p + akan30_central + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + central + r4, family = "binomial", data = data4)
+
+mg42 <- glm(vote_ndc_pres ~ akan_30km_l_p + akan30_central + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + central + r4, family = "binomial", data = data4)
+
+mg43 <- glm(vote_npp_pres ~ ewe_30km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + central + r4, family = "binomial", data = data4)
+
+mg44 <- glm(vote_ndc_pres ~ ewe_30km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + central + r4, family = "binomial", data = data4)
+
+stargazer(mg41, mg42, mg43, mg44, 
+          type = "latex", 
+          style = "apsr", 
+          covariate.labels = c("\\% Akan in 30 km (spatially weighted)", "\\% Akan in 30 km (spatially weighted) * Central Region", "\\% Ewe in 30 km (spatially weighted)", "Akan", "Ewe", "Dagomba (Mole)", "Male", "Economic approval", "Poverty (individual)", "Development index (EA)", "Central Region", "Round 4", "Intercept"),
+          title = "TABLE 4. Local Ethnic Geography and Individual-Level Party Support: Rural", notes = "\\parbox[t]{15cm}{Notes: *p < 0.05; **p < 0.01; ***p < 0.001. Logistic regression coefficients with standard errors clustered at EA level in parentheses. Outcome in columns 1 and 3 is support for NPP; outcome in columns 2 and 4 is support for NDC. Data are from Rounds 3 and 4 of the Ghana Afrobarometer, excluding respondents from local areas estimated to have more than 1000 people per sq. km}",
+          notes.append = FALSE,
+          header = FALSE,
+          omit.stat = c("aic", "ll"),
+          column.sep.width = "-15pt",
+          column.labels = c("NPP", "NDC", "NPP", "NDC"),
+          dep.var.labels.include = FALSE)
+
+
+
+
+
+```
+
+```{r, results = "asis"}
+data5 <- data_survey %>%
+  filter(urb == 1) %>%
+  filter(const230_h != "KUMASI")
+
+ma51 <- glm(vote_npp_pres ~ akan_30km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + r4, family = "binomial", data = data5)
+ma52 <- glm(vote_ndc_pres ~ akan_30km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + r4, family = "binomial", data = data5)
+ma53 <- glm(vote_npp_pres ~ ewe_30km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + r4, family = "binomial", data = data5)
+ma54 <- glm(vote_ndc_pres ~ ewe_30km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + r4, family = "binomial", data = data5)
+
+mb51 <- glm(vote_npp_pres ~ akan_5km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + r4, family = "binomial", data = data5)
+mb52 <- glm(vote_ndc_pres ~ akan_5km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + r4, family = "binomial", data = data5)
+mb53 <- glm(vote_npp_pres ~ ewe_5km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + r4, family = "binomial", data = data5)
+mb54 <- glm(vote_ndc_pres ~ ewe_5km_l_p + eth_akan + eth_ewe + eth_dagomba + male + economy_oneyear + poverty + dev_factor2 + r4, family = "binomial", data = data5)
+
+stargazer(ma51, ma52, ma53, ma54, 
+          type = "latex", 
+          style = "apsr", 
+          column.sep.width = "-15pt",
+          column.labels = c("NPP", "NDC", "NPP", "NDC"),
+          dep.var.labels.include = FALSE, 
+          notes.append = FALSE, 
+          keep = c("\\bakan_30km_l_p\\b", "\\bewe_30km_l_p\\b"),
+          omit.stat = c("n", "aic", "ll"),
+          covariate.labels = c("\\% Akan in 30 km (spatially weighted)", "\\% Ewe in 30 km (spatially weighted)"),
+          title = "TABLE 5a. Local Ethnic Geography and Individual-Level Party Support: Urban", 
+          header = FALSE)
+
+stargazer(mb51, mb52, mb53, mb54, 
+          type = "latex", 
+          style = "apsr", 
+          column.sep.width = "-15pt",
+          column.labels = c("NPP", "NDC", "NPP", "NDC"),
+          dep.var.labels.include = FALSE, 
+          notes.append = FALSE,
+          keep = c("\\bakan_5km_l_p\\b", "\\bewe_5km_l_p\\b"),
+          omit.stat = c("n", "aic", "ll"),
+          covariate.labels = c("\\% Akan in 5 km (spatially weighted)", "\\% Ewe in 5 km (spatially weighted)"),
+          title = "TABLE 5b. Local Ethnic Geography and Individual-Level Party Support: Urban", 
+          header = FALSE)
+
+```
+
+
+
+## Bibliography
